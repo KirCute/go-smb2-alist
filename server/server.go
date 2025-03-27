@@ -44,7 +44,7 @@ type Server struct {
 	listener net.Listener
 	active   bool
 
-	getShareCallback func(string) map[string]vfs.VFSFileSystem
+	getShareCallback func(string) (map[string]vfs.VFSFileSystem, error)
 	shares           map[string]map[string]namedFileSystem
 	sharesMutex      sync.Mutex
 
@@ -145,7 +145,7 @@ type ServerConfig struct {
 	IgnoreSetAttrErr bool
 }
 
-func NewServer(cfg *ServerConfig, a Authenticator, shares func(string) map[string]vfs.VFSFileSystem) *Server {
+func NewServer(cfg *ServerConfig, a Authenticator, shares func(string) (map[string]vfs.VFSFileSystem, error)) *Server {
 	srv := &Server{
 		authenticator:    a,
 		opens:            map[uint64]*Open{},
@@ -402,7 +402,11 @@ func (c *conn) treeConnect(pkt []byte) error {
 	if userShares, ok = c.serverCtx.shares[c.session.user]; !ok {
 		c.serverCtx.sharesMutex.Lock()
 		if userShares, ok = c.serverCtx.shares[c.session.user]; !ok {
-			fss := c.serverCtx.getShareCallback(c.session.user)
+			fss, e := c.serverCtx.getShareCallback(c.session.user)
+			if e != nil {
+				c.serverCtx.sharesMutex.Unlock()
+				return &InvalidRequestError{"failed get tree: " + e.Error()}
+			}
 			userShares = make(map[string]namedFileSystem)
 			for name, fs := range fss {
 				userShares[strings.ToUpper(name)] = namedFileSystem{name: name, VFSFileSystem: fs}
