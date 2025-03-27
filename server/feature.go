@@ -1,7 +1,7 @@
 package smb2
 
 import (
-	. "github.com/macos-fuse-t/go-smb2/internal/smb2"
+	. "github.com/KirCute/go-smb2-alist/internal/smb2"
 )
 
 // client

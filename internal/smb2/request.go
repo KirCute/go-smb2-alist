@@ -1,6 +1,6 @@
 package smb2
 
-import "github.com/macos-fuse-t/go-smb2/internal/utf16le"
+import "github.com/KirCute/go-smb2-alist/internal/utf16le"
 
 // ----------------------------------------------------------------------------
 // SMB2 NEGOTIATE Request Packet

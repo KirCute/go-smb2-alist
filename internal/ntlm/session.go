@@ -5,7 +5,7 @@ import (
 	"crypto/rc4"
 	"errors"
 
-	"github.com/macos-fuse-t/go-smb2/internal/utf16le"
+	"github.com/KirCute/go-smb2-alist/internal/utf16le"
 )
 
 type Session struct {

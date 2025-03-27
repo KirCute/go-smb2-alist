@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/macos-fuse-t/go-smb2/internal/smb2"
-	"github.com/macos-fuse-t/go-smb2/internal/utf16le"
+	"github.com/KirCute/go-smb2-alist/internal/smb2"
+	"github.com/KirCute/go-smb2-alist/internal/utf16le"
 )
 
 // NTLM v2 server
@@ -21,7 +21,7 @@ type Server struct {
 	nbDomain   string
 	dnsDomain  string
 	dnsName    string
-	accounts   map[string]string // User: Password
+	accounts   func(string) (string, bool)
 	allowGuest bool
 
 	nmsg    []byte
@@ -36,12 +36,12 @@ func NewServer(targetName, nbName, nbDomain, dnsName, dnsDomain string) *Server 
 		nbDomain:   nbDomain,
 		dnsDomain:  dnsDomain,
 		dnsName:    dnsName,
-		accounts:   make(map[string]string),
+		accounts:   func(string) (string, bool) { return "", false },
 	}
 }
 
-func (s *Server) AddAccount(user, password string) {
-	s.accounts[user] = password
+func (s *Server) SetAccount(verify func(string) (string, bool)) {
+	s.accounts = verify
 }
 
 func (s *Server) AllowGuest() {
@@ -232,13 +232,15 @@ func (s *Server) Authenticate(amsg []byte) (err error) {
 
 	if len(userName) != 0 || len(ntChallengeResponse) != 0 {
 		user := utf16le.DecodeToString(userName)
-		if _, ok := s.accounts[user]; !ok && !s.allowGuest {
-			return errors.New("no such user " + user)
+		var passStr string
+		var ok bool
+		if passStr, ok = s.accounts(user); !ok && !s.allowGuest {
+			return errors.New("login failure")
 		}
 		expectedNtChallengeResponse := make([]byte, len(ntChallengeResponse))
 		ntlmv2ClientChallenge := ntChallengeResponse[16:]
 		USER := utf16le.EncodeStringToBytes(strings.ToUpper(user))
-		password := utf16le.EncodeStringToBytes(s.accounts[user])
+		password := utf16le.EncodeStringToBytes(passStr)
 		h := hmac.New(md5.New, ntowfv2(USER, password, domainName))
 		serverChallenge := s.cmsg[24:32]
 		timeStamp := ntlmv2ClientChallenge[8:16]
@@ -253,6 +255,9 @@ func (s *Server) Authenticate(amsg []byte) (err error) {
 
 		session.isClientSide = false
 
+		if !ok {
+			user = ""
+		}
 		session.user = user
 		session.negotiateFlags = flags
 

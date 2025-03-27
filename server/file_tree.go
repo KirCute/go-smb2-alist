@@ -9,9 +9,9 @@ import (
 	"syscall"
 	"time"
 
-	. "github.com/macos-fuse-t/go-smb2/internal/erref"
-	. "github.com/macos-fuse-t/go-smb2/internal/smb2"
-	"github.com/macos-fuse-t/go-smb2/vfs"
+	. "github.com/KirCute/go-smb2-alist/internal/erref"
+	. "github.com/KirCute/go-smb2-alist/internal/smb2"
+	"github.com/KirCute/go-smb2-alist/vfs"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -924,7 +924,7 @@ func (t *fileTree) ioctl(ctx *compoundContext, pkt []byte) error {
 		return t.handleCreateOrGetObjectId(ctx, pkt)
 	}
 
-	log.Errorf("ioctl: code %d", r.CtlCode())
+	log.Errorf("ioctl: code %x", r.CtlCode())
 	/*rsp := new(IoctlResponse)
 	rsp.CtlCode = r.CtlCode()
 	rsp.FileId = r.FileId().Decode()
@@ -1499,8 +1499,38 @@ func (t *fileTree) queryInfoFile(ctx *compoundContext, pkt []byte) error {
 		info = &FileInternalInformationInfo{
 			int64(a.GetInodeNumber()),
 		}
+	case FileBasicInformation:
+		info = &FileBasicInformationInfo{
+			CreationTime:   *BirthTimeFromVfs(a),
+			LastAccessTime: *AccessTimeFromVfs(a),
+			LastWriteTime:  *ModifiedTimeFromVfs(a),
+			ChangeTime:     *ChangeTimeFromVfs(a),
+			FileAttributes: PermissionsFromVfs(a, open.pathName),
+		}
+	case FileStandardInformation:
+		info = &FileStandardInformationInfo{
+			EndOfFile:      int64(SizeFromVfs(a)),
+			AllocationSize: int64(DiskSizeFromVfs(a)),
+			Directory:      isDir,
+		}
+	case FileAccessInformation:
+		info = &FileAccessInformationInfo{
+			AccessFlags: MaxAccessFromVfs(a),
+		}
+	case FilePositionInformation:
+		info = &FilePositionInformationInfo{}
+	case FileModeInformation:
+		info = &FileModeInformationInfo{
+			Mode: FILE_SYNCHRONOUS_IO_ALERT,
+		}
+	case FileAlignmentInformation:
+		info = &FileAlignmentInformationInfo{}
+	case FileNameInformation:
+		info = &FileAlternateNameInformationInfo{
+			FileName: strings.ReplaceAll(name, "/", "\\"),
+		}
 	default:
-		log.Error("unsupported type")
+		log.Errorf("unsupported type: %d", r.FileInfoClass())
 		return &InvalidRequestError{"unsupported query class"}
 	}
 

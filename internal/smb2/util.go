@@ -2,15 +2,12 @@ package smb2
 
 import (
 	"encoding/binary"
+	"github.com/KirCute/go-smb2-alist/vfs"
 	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
-	"syscall"
 	"unicode/utf16"
-	"unsafe"
-
-	"github.com/macos-fuse-t/go-smb2/vfs"
 )
 
 var (
@@ -43,16 +40,6 @@ func MatchWildcard(s, pattern string) bool {
 		return false
 	}
 	return r.MatchString(s)
-}
-
-func DirentName(dirent *syscall.Dirent) string {
-	nameSlice := (*[256]byte)(unsafe.Pointer(&dirent.Name[0]))
-
-	nameLen := 0
-	for ; nameLen < len(nameSlice) && nameSlice[nameLen] != 0; nameLen++ {
-	}
-
-	return string(nameSlice[:nameLen])
 }
 
 func Align(n int, a int) int {

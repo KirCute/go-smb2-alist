@@ -16,16 +16,21 @@ import (
 	"sync"
 	"time"
 
-	"github.com/macos-fuse-t/go-smb2/internal/crypto/ccm"
-	"github.com/macos-fuse-t/go-smb2/internal/crypto/cmac"
-	. "github.com/macos-fuse-t/go-smb2/internal/erref"
-	. "github.com/macos-fuse-t/go-smb2/internal/smb2"
-	"github.com/macos-fuse-t/go-smb2/vfs"
+	"github.com/KirCute/go-smb2-alist/internal/crypto/ccm"
+	"github.com/KirCute/go-smb2-alist/internal/crypto/cmac"
+	. "github.com/KirCute/go-smb2-alist/internal/erref"
+	. "github.com/KirCute/go-smb2-alist/internal/smb2"
+	"github.com/KirCute/go-smb2-alist/vfs"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
 )
 
 const DEFAULT_IOPS = 32
+
+type namedFileSystem struct {
+	name string
+	vfs.VFSFileSystem
+}
 
 type Server struct {
 	maxCreditBalance uint16 // if it's zero, clientMaxCreditBalance is used. (See feature.go for more details)
@@ -38,13 +43,12 @@ type Server struct {
 	listener net.Listener
 	active   bool
 
-	shares     map[string]vfs.VFSFileSystem
-	origShares map[string]vfs.VFSFileSystem
+	getShareCallback func(string) map[string]vfs.VFSFileSystem
+	shares           map[string]map[string]namedFileSystem
+	sharesMutex      sync.Mutex
 
 	opens       map[uint64]*Open
 	opensByGuid map[Guid]*Open
-
-	allowGuest bool
 
 	maxIOReads  int
 	maxIOWrites int
@@ -134,30 +138,22 @@ var (
 )
 
 type ServerConfig struct {
-	AllowGuest       bool
 	MaxIOReads       int
 	MaxIOWrites      int
 	Xatrrs           bool
 	IgnoreSetAttrErr bool
 }
 
-func NewServer(cfg *ServerConfig, a Authenticator, shares map[string]vfs.VFSFileSystem) *Server {
-	newShares := map[string]vfs.VFSFileSystem{}
-	for i, v := range shares {
-		newShares[strings.ToUpper(i)] = v
-	}
-
+func NewServer(cfg *ServerConfig, a Authenticator, shares func(string) map[string]vfs.VFSFileSystem) *Server {
 	srv := &Server{
 		authenticator:    a,
-		shares:           newShares,
-		origShares:       shares,
 		opens:            map[uint64]*Open{},
-		allowGuest:       cfg.AllowGuest,
 		maxIOReads:       cfg.MaxIOReads,
 		maxIOWrites:      cfg.MaxIOWrites,
 		xattrs:           cfg.Xatrrs,
 		ignoreSetAttrErr: cfg.IgnoreSetAttrErr,
 		activeConns:      map[*conn]struct{}{},
+		getShareCallback: shares,
 	}
 	return srv
 }
@@ -399,6 +395,20 @@ func (c *conn) treeConnect(pkt []byte) error {
 	rsp.MessageId = p.MessageId()
 	rsp.Flags = 1
 
+	var userShares map[string]namedFileSystem
+	var ok bool
+	if userShares, ok = c.serverCtx.shares[c.session.user]; !ok {
+		c.serverCtx.sharesMutex.Lock()
+		if userShares, ok = c.serverCtx.shares[c.session.user]; !ok {
+			fss := c.serverCtx.getShareCallback(c.session.user)
+			userShares = make(map[string]namedFileSystem)
+			for name, fs := range fss {
+				userShares[strings.ToUpper(name)] = namedFileSystem{name: name, VFSFileSystem: fs}
+			}
+		}
+		c.serverCtx.sharesMutex.Unlock()
+	}
+
 	if strings.HasSuffix(r.Path(), "\\IPC$") {
 		rsp.ShareType = SMB2_SHARE_TYPE_PIPE
 		rsp.MaximalAccess = SYNCHRONIZE | WRITE_OWNER | WRITE_DAC | READ_CONTROL | DELETE |
@@ -411,7 +421,10 @@ func (c *conn) treeConnect(pkt []byte) error {
 			rsp.TreeId = t.getTree().treeId
 			tc = t.getTree()
 		} else {
-			shares := maps.Keys(c.serverCtx.origShares)
+			shares := make([]string, 0, len(userShares))
+			for _, share := range userShares {
+				shares = append(shares, share.name)
+			}
 			ft := &ipcTree{
 				treeConn: treeConn{
 					session:    c.session,
@@ -436,10 +449,10 @@ func (c *conn) treeConnect(pkt []byte) error {
 		}
 		path := parts[len(parts)-1]
 
-		fs, ok := c.serverCtx.shares[strings.ToUpper(path)]
+		fs, ok := userShares[strings.ToUpper(path)]
 		if !ok {
-			if fs, ok = c.serverCtx.shares[strings.ToUpper(path)+"$"]; !ok {
-				log.Debugf("shares: %v", maps.Keys(c.serverCtx.shares))
+			if fs, ok = userShares[strings.ToUpper(path)+"$"]; !ok {
+				log.Debugf("shares: %v", maps.Keys(userShares))
 				return &InvalidRequestError{"bad share: " + path}
 			}
 		}
@@ -795,7 +808,7 @@ func (c *conn) sessionServerSetupChallenge(pkt []byte) error {
 
 	log.Debugf("auth user: %s", user)
 	flags := uint16(0)
-	if c.serverCtx.allowGuest {
+	if user == "" {
 		flags = SMB2_SESSION_FLAG_IS_GUEST
 	}
 
@@ -805,6 +818,7 @@ func (c *conn) sessionServerSetupChallenge(pkt []byte) error {
 		treeConnTables: make(map[uint32]*treeConn),
 		sessionFlags:   flags,
 		sessionId:      sessionId,
+		user:           user,
 	}
 
 	rsp := &SessionSetupResponse{

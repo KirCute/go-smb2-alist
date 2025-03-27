@@ -1,4 +1,4 @@
-module github.com/macos-fuse-t/go-smb2
+module github.com/KirCute/go-smb2-alist
 
 go 1.18
 
@@ -12,7 +12,6 @@ require (
 	github.com/spf13/pflag v1.0.5
 	golang.org/x/crypto v0.13.0
 	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63
-	golang.org/x/sys v0.12.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
@@ -21,5 +20,6 @@ require (
 	github.com/miekg/dns v1.1.56 // indirect
 	golang.org/x/mod v0.12.0 // indirect
 	golang.org/x/net v0.15.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/tools v0.13.0 // indirect
 )

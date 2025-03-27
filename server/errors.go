@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	. "github.com/macos-fuse-t/go-smb2/internal/erref"
+	. "github.com/KirCute/go-smb2-alist/internal/erref"
 )
 
 // TransportError represents a error come from net.Conn layer.

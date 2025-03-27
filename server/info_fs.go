@@ -3,8 +3,8 @@ package smb2
 import (
 	"encoding/binary"
 
-	. "github.com/macos-fuse-t/go-smb2/internal/smb2"
-	"github.com/macos-fuse-t/go-smb2/internal/utf16le"
+	. "github.com/KirCute/go-smb2-alist/internal/smb2"
+	"github.com/KirCute/go-smb2-alist/internal/utf16le"
 )
 
 var le = binary.LittleEndian

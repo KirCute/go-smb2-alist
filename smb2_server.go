@@ -1,16 +1,16 @@
 package main
 
 import (
+	"gopkg.in/natefinch/lumberjack.v2"
 	"os"
 	"os/signal"
 
-	"github.com/macos-fuse-t/go-smb2/bonjour"
-	"github.com/macos-fuse-t/go-smb2/config"
-	smb2 "github.com/macos-fuse-t/go-smb2/server"
-	"github.com/macos-fuse-t/go-smb2/vfs"
+	"github.com/KirCute/go-smb2-alist/bonjour"
+	"github.com/KirCute/go-smb2-alist/config"
+	smb2 "github.com/KirCute/go-smb2-alist/server"
+	"github.com/KirCute/go-smb2-alist/vfs"
 
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var cfg config.AppConfig
@@ -26,21 +26,27 @@ func main() {
 
 	srv := smb2.NewServer(
 		&smb2.ServerConfig{
-			AllowGuest:  cfg.AllowGuest,
 			MaxIOReads:  cfg.MaxIOReads,
 			MaxIOWrites: cfg.MaxIOWrites,
 			Xatrrs:      cfg.Xatrrs,
 		},
 		&smb2.NTLMAuthenticator{
-			TargetSPN:    "",
-			NbDomain:     cfg.Hostname,
-			NbName:       cfg.Hostname,
-			DnsName:      cfg.Hostname + ".local",
-			DnsDomain:    ".local",
-			UserPassword: map[string]string{"a": "a"},
-			AllowGuest:   cfg.AllowGuest,
+			TargetSPN: "",
+			NbDomain:  cfg.Hostname,
+			NbName:    cfg.Hostname,
+			DnsName:   cfg.Hostname + ".local",
+			DnsDomain: ".local",
+			UserPassword: func(user string) (string, bool) {
+				if user == "a" {
+					return "a", true
+				}
+				return "", false
+			},
+			AllowGuest: cfg.AllowGuest,
 		},
-		map[string]vfs.VFSFileSystem{cfg.ShareName: NewPassthroughFS(cfg.MountDir)},
+		func(string) map[string]vfs.VFSFileSystem {
+			return map[string]vfs.VFSFileSystem{cfg.ShareName: NewPassthroughFS(cfg.MountDir + "/_smbTest")}
+		},
 	)
 
 	log.Infof("Starting server at %s", cfg.ListenAddr)

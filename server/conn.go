@@ -7,8 +7,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	. "github.com/macos-fuse-t/go-smb2/internal/erref"
-	. "github.com/macos-fuse-t/go-smb2/internal/smb2"
+	. "github.com/KirCute/go-smb2-alist/internal/erref"
+	. "github.com/KirCute/go-smb2-alist/internal/smb2"
 	log "github.com/sirupsen/logrus"
 )
 

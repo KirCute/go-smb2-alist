@@ -3,8 +3,8 @@ package smb2
 import (
 	"encoding/asn1"
 
-	"github.com/macos-fuse-t/go-smb2/internal/ntlm"
-	"github.com/macos-fuse-t/go-smb2/internal/spnego"
+	"github.com/KirCute/go-smb2-alist/internal/ntlm"
+	"github.com/KirCute/go-smb2-alist/internal/spnego"
 )
 
 type Authenticator interface {
@@ -18,7 +18,7 @@ type Authenticator interface {
 // NTLMAuthenticator implements session-setup through NTLMv2.
 // It doesn't support NTLMv1. You can use Hash instead of Password.
 type NTLMAuthenticator struct {
-	UserPassword map[string]string
+	UserPassword func(string) (string, bool)
 	TargetSPN    string
 	NbDomain     string
 	NbName       string
@@ -36,9 +36,7 @@ func (i *NTLMAuthenticator) oid() asn1.ObjectIdentifier {
 
 func (i *NTLMAuthenticator) challenge(sc []byte) ([]byte, error) {
 	i.ntlm = ntlm.NewServer(i.TargetSPN, i.NbName, i.NbDomain, i.DnsName, i.DnsDomain)
-	for u, p := range i.UserPassword {
-		i.ntlm.AddAccount(u, p)
-	}
+	i.ntlm.SetAccount(i.UserPassword)
 	if i.AllowGuest {
 		i.ntlm.AllowGuest()
 	}

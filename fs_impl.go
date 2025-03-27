@@ -4,19 +4,17 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"github.com/KirCute/go-smb2-alist/stats"
+	"github.com/KirCute/go-smb2-alist/vfs"
+	"github.com/fsnotify/fsnotify"
+	"github.com/pkg/xattr"
+	log "github.com/sirupsen/logrus"
+	"hash/fnv"
 	"io"
 	"os"
 	"path"
 	"path/filepath"
 	"sync"
-	"syscall"
-
-	"github.com/fsnotify/fsnotify"
-	"github.com/macos-fuse-t/go-smb2/stats"
-	"github.com/macos-fuse-t/go-smb2/vfs"
-	"github.com/pkg/xattr"
-	log "github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 )
 
 type OpenFile struct {
@@ -44,6 +42,7 @@ func NewPassthroughFS(rootPath string) *PassthroughFS {
 }
 
 func (fs *PassthroughFS) GetAttr(handle vfs.VfsHandle) (*vfs.Attributes, error) {
+	fmt.Println("GetAttr")
 	p := fs.rootPath
 	if handle != 0 {
 		v, ok := fs.openFiles.Load(handle)
@@ -69,6 +68,7 @@ func (fs *PassthroughFS) GetAttr(handle vfs.VfsHandle) (*vfs.Attributes, error) 
 }
 
 func (fs *PassthroughFS) SetAttr(handle vfs.VfsHandle, a *vfs.Attributes) (*vfs.Attributes, error) {
+	fmt.Println("SetAttr")
 	if handle == 0 {
 		return nil, fmt.Errorf("bad handle")
 	}
@@ -107,24 +107,12 @@ func (fs *PassthroughFS) SetAttr(handle vfs.VfsHandle, a *vfs.Attributes) (*vfs.
 }
 
 func (fs *PassthroughFS) StatFS(handle vfs.VfsHandle) (*vfs.FSAttributes, error) {
-	var statfs unix.Statfs_t
-	if err := unix.Statfs(fs.rootPath, &statfs); err != nil {
-		log.Errorf("statfs")
-		return nil, err
-	}
-
 	a := vfs.FSAttributes{}
-	a.SetAvailableBlocks(statfs.Bavail)
-	a.SetBlockSize(uint64(statfs.Bsize))
-	a.SetBlocks(statfs.Bavail)
-	a.SetFiles(statfs.Files)
-	a.SetFreeBlocks(statfs.Bfree)
-	a.SetFreeFiles(statfs.Ffree)
-	a.SetIOSize(uint64(statfs.Bsize))
 	return &a, nil
 }
 
 func (fs *PassthroughFS) FSync(handle vfs.VfsHandle) error {
+	fmt.Println("FSync")
 	if handle == 0 {
 		return fmt.Errorf("bad handle")
 	}
@@ -139,14 +127,17 @@ func (fs *PassthroughFS) FSync(handle vfs.VfsHandle) error {
 }
 
 func (fs *PassthroughFS) Flush(handle vfs.VfsHandle) error {
+	fmt.Println("Flush")
 	return nil
 }
 
-func (fs *PassthroughFS) Mknod(vfs.VfsNode, string, int, int) (*vfs.Attributes, error) {
+func (fs *PassthroughFS) Mknod(n vfs.VfsNode, p string, flags, mode int) (*vfs.Attributes, error) {
+	fmt.Printf("Mknod %s %x %o\n", p, flags, mode)
 	return nil, nil
 }
 
-func (fs *PassthroughFS) Create(vfs.VfsNode, string, int, int) (*vfs.Attributes, vfs.VfsHandle, error) {
+func (fs *PassthroughFS) Create(_ vfs.VfsNode, p string, f, m int) (*vfs.Attributes, vfs.VfsHandle, error) {
+	fmt.Printf("Create %s %x %o\n", p, f, m)
 	return nil, 0, nil
 }
 
@@ -157,15 +148,15 @@ func randint64() uint64 {
 }
 
 func (fs *PassthroughFS) Open(p string, flags int, mode int) (vfs.VfsHandle, error) {
+	fmt.Printf("Open %s %x %o\n", p, mode, mode)
 	p = path.Join(fs.rootPath, p)
 
 	var f *os.File
 	var err error
 	if flags&0x200000 != 0 {
 		// O_SYMLINK, O_PATH
-		var fd int
-		fd, err = syscall.Open(p, 0x200000, 0)
-		f = os.NewFile(uintptr(fd), p)
+		// todo
+		fmt.Printf("open path not support, p=%s, flags=%x, mode=%o\n", p, flags, mode)
 	} else {
 		f, err = os.OpenFile(p, flags, os.FileMode(mode))
 	}
@@ -177,7 +168,7 @@ func (fs *PassthroughFS) Open(p string, flags int, mode int) (vfs.VfsHandle, err
 
 	log.Debugf("open %s success: %d", p, f.Fd())
 	h := vfs.VfsHandle(randint64())
-	fs.openFiles.Store(vfs.VfsHandle(h), &OpenFile{f: f, h: h, path: p})
+	fs.openFiles.Store(h, &OpenFile{f: f, h: h, path: p})
 
 	stats.AddOpen(p)
 
@@ -185,6 +176,7 @@ func (fs *PassthroughFS) Open(p string, flags int, mode int) (vfs.VfsHandle, err
 }
 
 func (fs *PassthroughFS) Close(handle vfs.VfsHandle) error {
+	fmt.Println("Close")
 	v, ok := fs.openFiles.Load(handle)
 	if !ok {
 		log.Errorf("Close: filehandle not found %d", handle)
@@ -203,6 +195,7 @@ func (fs *PassthroughFS) Close(handle vfs.VfsHandle) error {
 }
 
 func (fs *PassthroughFS) Lookup(handle vfs.VfsHandle, name string) (*vfs.Attributes, error) {
+	fmt.Println("Lookup")
 
 	p := fs.rootPath
 	if handle != 0 {
@@ -266,6 +259,7 @@ func (fs *PassthroughFS) Read(handle vfs.VfsHandle, buf []byte, offset uint64, f
 }
 
 func (fs *PassthroughFS) Write(handle vfs.VfsHandle, buf []byte, offset uint64, flags int) (int, error) {
+	fmt.Printf("Write %d %d %x\n", len(buf), offset, flags)
 	if handle == 0 {
 		return 0, fmt.Errorf("bad handle")
 	}
@@ -579,21 +573,17 @@ func (fs *PassthroughFS) Truncate(handle vfs.VfsHandle, len uint64) error {
 }
 
 func fileInfoToAttr(stat os.FileInfo) (*vfs.Attributes, error) {
-	sysStat, ok := vfs.CompatStat(stat)
-	if !ok {
-		return nil, fmt.Errorf("failed to convert to syscall.Stat_t")
-	}
-
 	a := vfs.Attributes{}
-	a.SetInodeNumber(sysStat.Ino)
+	h := fnv.New64()
+	_, err := h.Write([]byte(stat.Name()))
+	if err != nil {
+		return nil, err
+	}
+	a.SetInodeNumber(h.Sum64())
 	a.SetSizeBytes(uint64(stat.Size()))
-	a.SetDiskSizeBytes(uint64(sysStat.Blocks * 512))
 	a.SetUnixMode(uint32(stat.Mode()))
 	a.SetPermissions(vfs.NewPermissionsFromMode(uint32(stat.Mode().Perm())))
-	a.SetAccessTime(sysStat.Atime)
 	a.SetLastDataModificationTime(stat.ModTime())
-	a.SetBirthTime(sysStat.Btime)
-	a.SetLastStatusChangeTime(sysStat.Ctime)
 	if stat.IsDir() {
 		a.SetFileType(vfs.FileTypeDirectory)
 	} else if stat.Mode()&os.ModeSymlink != 0 {

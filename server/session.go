@@ -6,7 +6,7 @@ import (
 	"hash"
 	"math/rand"
 
-	. "github.com/macos-fuse-t/go-smb2/internal/smb2"
+	. "github.com/KirCute/go-smb2-alist/internal/smb2"
 )
 
 var zero [16]byte
@@ -17,6 +17,7 @@ type session struct {
 	sessionFlags              uint16
 	sessionId                 uint64
 	preauthIntegrityHashValue [64]byte
+	user                      string
 
 	signer    hash.Hash
 	verifier  hash.Hash
