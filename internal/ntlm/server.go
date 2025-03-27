@@ -22,7 +22,7 @@ type Server struct {
 	dnsDomain  string
 	dnsName    string
 	accounts   func(string) (string, bool)
-	allowGuest bool
+	allowGuest func() bool
 
 	nmsg    []byte
 	cmsg    []byte
@@ -44,8 +44,8 @@ func (s *Server) SetAccount(verify func(string) (string, bool)) {
 	s.accounts = verify
 }
 
-func (s *Server) AllowGuest() {
-	s.allowGuest = true
+func (s *Server) SetAllowGuest(f func() bool) {
+	s.allowGuest = f
 }
 
 func (s *Server) Challenge(nmsg []byte) (cmsg []byte, err error) {
@@ -234,7 +234,7 @@ func (s *Server) Authenticate(amsg []byte) (err error) {
 		user := utf16le.DecodeToString(userName)
 		var passStr string
 		var ok bool
-		if passStr, ok = s.accounts(user); !ok && !s.allowGuest {
+		if passStr, ok = s.accounts(user); !ok && !s.allowGuest() {
 			return errors.New("login failure")
 		}
 		expectedNtChallengeResponse := make([]byte, len(ntChallengeResponse))

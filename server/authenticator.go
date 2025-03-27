@@ -24,7 +24,7 @@ type NTLMAuthenticator struct {
 	NbName       string
 	DnsName      string
 	DnsDomain    string
-	AllowGuest   bool
+	AllowGuest   func() bool
 
 	ntlm   *ntlm.Server
 	seqNum uint32
@@ -37,9 +37,7 @@ func (i *NTLMAuthenticator) oid() asn1.ObjectIdentifier {
 func (i *NTLMAuthenticator) challenge(sc []byte) ([]byte, error) {
 	i.ntlm = ntlm.NewServer(i.TargetSPN, i.NbName, i.NbDomain, i.DnsName, i.DnsDomain)
 	i.ntlm.SetAccount(i.UserPassword)
-	if i.AllowGuest {
-		i.ntlm.AllowGuest()
-	}
+	i.ntlm.SetAllowGuest(i.AllowGuest)
 
 	nmsg, err := i.ntlm.Challenge(sc)
 	if err != nil {

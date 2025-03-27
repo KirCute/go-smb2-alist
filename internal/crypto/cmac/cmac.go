@@ -34,6 +34,7 @@ package cmac
 
 import (
 	"crypto/cipher"
+	"errors"
 	"hash"
 )
 
@@ -53,7 +54,7 @@ type cmac struct {
 
 // NewCMAC returns a new instance of a CMAC message authentication code
 // digest using the given Cipher.
-func New(c cipher.Block) hash.Hash {
+func New(c cipher.Block) (hash.Hash, error) {
 	var r byte
 	n := c.BlockSize()
 	switch n {
@@ -62,7 +63,7 @@ func New(c cipher.Block) hash.Hash {
 	case 128 / 8:
 		r = r128
 	default:
-		panic("crypto/cmac: NewCMAC: invalid cipher block size")
+		return nil, errors.New("crypto/cmac: NewCMAC: invalid cipher block size")
 	}
 
 	d := new(cmac)
@@ -81,7 +82,7 @@ func New(c cipher.Block) hash.Hash {
 		d.k2[n-1] ^= r
 	}
 
-	return d
+	return d, nil
 }
 
 // Reset clears the digest state, starting a new digest.

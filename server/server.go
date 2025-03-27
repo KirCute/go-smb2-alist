@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -226,12 +227,13 @@ func (d *Server) Serve(addr string) error {
 	return nil
 }
 
-func (d *Server) Shutdown() {
+func (d *Server) Shutdown() error {
 	d.active = false
-	d.listener.Close()
+	err := d.listener.Close()
 	for c := range d.activeConns {
-		c.shutdown()
+		err = errors.Join(err, c.shutdown())
 	}
+	return err
 }
 
 func (c *conn) Run() error {
@@ -845,8 +847,14 @@ func (c *conn) sessionServerSetupChallenge(pkt []byte) error {
 			if err != nil {
 				return &InternalError{err.Error()}
 			}
-			s.signer = cmac.New(ciph)
-			s.verifier = cmac.New(ciph)
+			s.signer, err = cmac.New(ciph)
+			if err != nil {
+				return &InternalError{err.Error()}
+			}
+			s.verifier, err = cmac.New(ciph)
+			if err != nil {
+				return &InternalError{err.Error()}
+			}
 
 			// s.applicationKey = kdf(sessionKey, []byte("SMB2APP\x00"), []byte("SmbRpc\x00"))
 
@@ -877,8 +885,14 @@ func (c *conn) sessionServerSetupChallenge(pkt []byte) error {
 			if err != nil {
 				return &InternalError{err.Error()}
 			}
-			s.signer = cmac.New(ciph)
-			s.verifier = cmac.New(ciph)
+			s.signer, err = cmac.New(ciph)
+			if err != nil {
+				return &InternalError{err.Error()}
+			}
+			s.verifier, err = cmac.New(ciph)
+			if err != nil {
+				return &InternalError{err.Error()}
+			}
 
 			encryptionKey := kdf(sessionKey, []byte("SMBC2CCipherKey\x00"), s.preauthIntegrityHashValue[:])
 			decryptionKey := kdf(sessionKey, []byte("SMBS2SCipherKey\x00"), s.preauthIntegrityHashValue[:])

@@ -33,7 +33,7 @@ func TestSign(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	signer := cmac.New(ciph)
+	signer, _ := cmac.New(ciph)
 
 	p := PacketCodec(pkt)
 

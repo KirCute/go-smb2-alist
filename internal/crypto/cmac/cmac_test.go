@@ -64,7 +64,7 @@ func TestCMAC(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := New(ciph).(*cmac)
+	h, _ := New(ciph).(*cmac)
 
 	if !bytes.Equal(h.k1, k1) {
 		t.Error("fail")

@@ -120,11 +120,11 @@ type conn struct {
 	treeMapById   map[uint32]treeOps
 }
 
-func (conn *conn) shutdown() {
+func (conn *conn) shutdown() error {
 	conn.cancel()
 	conn.wdone <- struct{}{}
 	conn.rdone <- struct{}{}
-	conn.t.Close()
+	return conn.t.Close()
 }
 
 func (conn *conn) useSession() bool {
